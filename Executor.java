@@ -60,6 +60,23 @@ class Executor extends Thread {
             mergedRootMat.start();
             barrier.await();
 
+            barrier = new CyclicBarrier(1 + 1);
+            Eroot eroot = new Eroot(p1.m_vertex, barrier);
+            eroot.start();
+            barrier.await();
+
+            barrier = new CyclicBarrier(2);
+            BS backSubRoot = new BS(eroot.m_vertex, barrier);
+            backSubRoot.start();
+            barrier.await();
+            //[(BS)2(BS)3]
+            barrier = new CyclicBarrier(3);
+            BS backSubLeft = new BS(backSubRoot.m_vertex.m_left, barrier);
+            BS backSubRight = new BS(backSubRoot.m_vertex.m_right, barrier);
+            backSubLeft.start();
+            backSubRight.start();
+            barrier.await();
+
             //test
             if (p1.m_vertex.m_a[0][0] == 1.0 & p1.m_vertex.m_a[0][1] == -0.5 && p1.m_vertex.m_a[0][2] == -0.5 &
                     p1.m_vertex.m_a[1][0] == 0.0 & p1.m_vertex.m_a[1][1] == 1.0 && p1.m_vertex.m_a[1][2] == 0.0 &
