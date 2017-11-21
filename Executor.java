@@ -1,3 +1,5 @@
+import java.lang.reflect.Array;
+import java.util.*;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.BrokenBarrierException;
 
@@ -5,55 +7,84 @@ class Executor extends Thread {
     public synchronized void run() {
         Vertex S = new Vertex(null, null, null, "S");
         try {
-            //[(P1)]
+
+            int k = 3;
+
+            List<Vertex> vertices = new LinkedList<Vertex>();
             CyclicBarrier barrier = new CyclicBarrier(1 + 1);
             P1 p1 = new P1(S, barrier);
             p1.start();
             barrier.await();
-            //[(P2)1(P2)2]
-            barrier = new CyclicBarrier(2 + 1);
-            P2 p2a = new P2(p1.m_vertex.m_left, barrier);
-            P2 p2b = new P2(p1.m_vertex.m_right, barrier);
-            p2a.start();
-            p2b.start();
-            barrier.await();
+
+            vertices.add(p1.m_vertex);
+
+            for(int i = 1; i < k - 1; ++i ) {
+                barrier = new CyclicBarrier(vertices.size() * 2 + 1);
+                List<Vertex> updatedVertices = new LinkedList<Vertex>();
+                for(Vertex vertex : vertices) {
+                    //[(P2)1(P2)2]
+                    P2 p2a = new P2(vertex.m_left, barrier);
+                    P2 p2b = new P2(vertex.m_right, barrier);
+                    p2a.start();
+                    p2b.start();
+                    updatedVertices.add(p2a.m_vertex);
+                    updatedVertices.add(p2b.m_vertex);
+                }
+                vertices = updatedVertices;
+                barrier.await();
+            }
+
             //[(P2)3(P2)4(P3)5(P3)6]
-            barrier = new CyclicBarrier(4 + 1);
-            P3 p3c = new P3(p2a.m_vertex.m_left, barrier);
-            P3 p3d = new P3(p2a.m_vertex.m_right, barrier);
-            P3 p3e = new P3(p2b.m_vertex.m_left, barrier);
-            P3 p3f = new P3(p2b.m_vertex.m_right, barrier);
-            p3c.start();
-            p3d.start();
-            p3e.start();
-            p3f.start();
+            barrier = new CyclicBarrier(vertices.size() * 2 + 1);
+            List<Vertex> leaves = new LinkedList<Vertex>();
+            for(Vertex vertex : vertices) {
+                P3 p3Left = new P3(vertex.m_left, barrier);
+                P3 p3Right = new P3(vertex.m_right, barrier);
+                p3Left.start();
+                p3Right.start();
+                leaves.add(p3Left.m_vertex);
+                leaves.add(p3Right.m_vertex);
+            }
             barrier.await();
-            // MULTI-FRONTAL SOLVER ALGORITHM
-            //[(A1)(A)1(A)2(AN)]
-            barrier = new CyclicBarrier(4 + 1);
-            A1 localMat1 = new A1(p3c.m_vertex, barrier);
-            A localMat2 = new A(p3d.m_vertex, barrier);
-            A localMat3 = new A(p3e.m_vertex, barrier);
-            AN localMat4 = new AN(p3f.m_vertex, barrier);
-            localMat1.start();
-            localMat2.start();
-            localMat3.start();
-            localMat4.start();
-            barrier.await();
-            //[(A2)1(A2)2(A2)3]
-            barrier = new CyclicBarrier(2 + 1);
-            A2 mergedMat1 = new A2(p2a.m_vertex, barrier);
-            A2 mergedMat2 = new A2(p2b.m_vertex, barrier);
-            mergedMat1.start();
-            mergedMat2.start();
-            barrier.await();
-            //[(E2)1(E2)2(E2)3]
-            barrier = new CyclicBarrier(2 + 1);
-            E2 gaussElimMat1 = new E2(p2a.m_vertex, barrier);
-            E2 gaussElimMat2 = new E2(p2b.m_vertex, barrier);
-            gaussElimMat1.start();
-            gaussElimMat2.start();
-            barrier.await();
+
+            barrier = new CyclicBarrier(leaves.size() + 1);
+            A1 localMatA1 = new A1(leaves.get(0), barrier);
+            localMatA1.start();
+            for(int i = 1; i < leaves.size() - 1; ++i) {
+                A localMat = new A(leaves.get(i), barrier);
+                localMat.start();
+            }
+            AN localMatAN = new AN(leaves.get(leaves.size() - 1), barrier);
+            localMatAN.start();
+
+            Set<Vertex> verticesSet = new HashSet<Vertex>();
+            for(Vertex vertex : leaves) {
+                verticesSet.add(vertex.m_parent);
+            }
+
+            do {
+                barrier = new CyclicBarrier(verticesSet.size() + 1);
+                for(Vertex vertex : verticesSet) {
+                    A2 mergedMat = new A2(vertex, barrier);
+                    mergedMat.start();
+                }
+                barrier.await();
+                barrier = new CyclicBarrier(verticesSet.size() + 1);
+                for(Vertex vertex : verticesSet) {
+                    E2 gaussElimMat = new E2(vertex, barrier);
+                    gaussElimMat.start();
+                }
+                barrier.await();
+                Set<Vertex> updatedVerticesSet = new HashSet<Vertex>();
+                for(Vertex vertex : verticesSet) {
+                    updatedVerticesSet.add(vertex.m_parent);
+                    System.out.println(Arrays.toString(vertex.m_x));
+
+                }
+                verticesSet = updatedVerticesSet;
+
+            } while (verticesSet.size() > 1);
+
             //[(Aroot)]
             barrier = new CyclicBarrier(1 + 1);
             Aroot mergedRootMat = new Aroot(p1.m_vertex, barrier);
@@ -65,17 +96,30 @@ class Executor extends Thread {
             eroot.start();
             barrier.await();
 
-            barrier = new CyclicBarrier(2);
-            BS backSubRoot = new BS(eroot.m_vertex, barrier);
-            backSubRoot.start();
-            barrier.await();
-            //[(BS)2(BS)3]
-            barrier = new CyclicBarrier(3);
-            BS backSubLeft = new BS(backSubRoot.m_vertex.m_left, barrier);
-            BS backSubRight = new BS(backSubRoot.m_vertex.m_right, barrier);
-            backSubLeft.start();
-            backSubRight.start();
-            barrier.await();
+            System.out.println(Arrays.toString(eroot.m_vertex.m_x));
+
+            vertices = new LinkedList<Vertex>();
+            vertices.add(p1.m_vertex);
+
+            for(int i = 0; i < k - 1; ++i) {
+                barrier = new CyclicBarrier(vertices.size() + 1);
+                for(Vertex vertex : vertices) {
+                    BS backwardSub = new BS(vertex, barrier);
+                    backwardSub.start();
+                }
+                barrier.await();
+                List<Vertex> updatedVertices = new LinkedList<>();
+                for(Vertex vertex : vertices) {
+                    updatedVertices.add(vertex.m_left);
+                    updatedVertices.add(vertex.m_right);
+                }
+                vertices = updatedVertices;
+            }
+
+            System.out.println(leaves.get(0).m_x[1] + " ");
+            for(int i = 0; i < leaves.size(); ++i) {
+                System.out.println(leaves.get(i).m_x[2] + " ");
+            }
 
             //test
             if (p1.m_vertex.m_a[0][0] == 1.0 & p1.m_vertex.m_a[0][1] == -0.5 && p1.m_vertex.m_a[0][2] == -0.5 &

@@ -11,7 +11,7 @@ class A1 extends Production {
         T.m_a[2][1] = -1.0;
         T.m_a[1][2] = 0.0;
         T.m_a[2][2] = 1.0;
-        T.m_b[1] = 0.0;
+        T.m_b[1] = 1.0;
         T.m_b[2] = 0.0;
         return T;
     }
